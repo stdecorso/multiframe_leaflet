@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <title>4 Stagioni TMean (Legenda Gradiente Orizzontale)</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    body {
+      margin: 0;
+      font-family: sans-serif;
+    }
+    #controls {
+      padding: 10px;
+      background: #f4f4f4;
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+    #yearLabel {
+      font-weight: bold;
+      min-width: 50px;
+      text-align: center;
+    }
+    input[type='range'] {
+      width: 300px;
+    }
+    .map-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      height: calc(100vh - 100px);
+    }
+    .map-frame {
+      border: 1px solid #ccc;
+      position: relative;
+    }
+    .map-title {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      background: rgba(255,255,255,0.8);
+      padding: 4px 8px;
+      font-weight: bold;
+      font-size: 14px;
+      z-index: 999;
+    }
+    .map {
+      width: 100%;
+      height: 100%;
+    }
+    #legendContainer {
+      padding: 15px;
+      background: rgba(255, 255, 255, 0.95);
+      border: 1px solid #ccc;
+      max-width: 100%;
+      margin: 10px;
+      font-size: 14px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+
+    #gradientBar {
+      width: 100%;
+      height: 40px;
+      border-radius: 4px;
+      background: linear-gradient(to right,
+        #122b6f 0%,      /* -25°C */
+        #12376f 16.6%,   /* -6.9°C */
+        #678baa 33.3%,   /* 10°C */
+        #ffffbf 50%,     /* 22°C */
+        #e87559 66.6%,   /* 32°C */
+        #e04736 100%     /* 51.4°C */
+      );
+      margin-bottom: 8px;
+    }
+
+    #labelsContainer {
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+      font-weight: bold;
+      font-size: 14px;
+      color: #333;
+    }
+
+    .label-item {
+      text-align: center;
+      flex: 1;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="controls">
+    <label for="yearRange">Anno:</label>
+    <input type="range" id="yearRange" min="2013" max="2023" value="2013" step="1" />
+    <div id="yearLabel">2013</div>
+    <button id="playBtn">▶️ Play</button>
+    <button id="stopBtn" disabled>⏸ Stop</button>
+  </div>
+
+  <div class="map-grid">
+    <div class="map-frame">
+      <div class="map-title">Inverno</div>
+      <div id="mapWinter" class="map"></div>
+    </div>
+    <div class="map-frame">
+      <div class="map-title">Primavera</div>
+      <div id="mapSpring" class="map"></div>
+    </div>
+    <div class="map-frame">
+      <div class="map-title">Estate</div>
+      <div id="mapSummer" class="map"></div>
+    </div>
+    <div class="map-frame">
+      <div class="map-title">Autunno</div>
+      <div id="mapAutumn" class="map"></div>
+    </div>
+  </div>
+
+  <div id="legendContainer">
+    <strong>Legenda Temperatura Media (TMean):</strong>
+    <div id="gradientBar"></div>
+    <div id="labelsContainer">
+      <div class="label-item">-25°C</div>
+      <div class="label-item">-6.9°C</div>
+      <div class="label-item">10°C</div>
+      <div class="label-item">22°C</div>
+      <div class="label-item">32°C</div>
+      <div class="label-item">51.4°C</div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://rawcdn.githack.com/jieter/Leaflet.Sync/master/L.Map.Sync.js"></script>
+  <script>
+    const years = ['2013', '2014', '2015', '2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023'];
+    const wmsUrl = 'https://mirificus.isprambiente.it/geoserver/geonode/wms';
+
+    // ⚙️ Parametri ENV (se usi uno stile con env, altrimenti rimuovi)
+    const baseEnv = ''; // ← Modifica se necessario
+
+    const baseOptions = {
+      format: 'image/png',
+      transparent: true,
+      version: '1.1.0',
+      attribution: 'ISPRA',
+      styles: 'italy_t_mean_env' // ← Assicurati che corrisponda allo stile SLD con i tuoi ColorMapEntry
+    };
+
+    const maps = {
+      winter: L.map('mapWinter').setView([42.2, 12.0], 4.5),
+      spring: L.map('mapSpring').setView([42.2, 12.0], 4.5),
+      summer: L.map('mapSummer').setView([42.2, 12.0], 4.5),
+      autumn: L.map('mapAutumn').setView([42.2, 12.0], 4.5)
+    };
+
+    Object.keys(maps).forEach(key => {
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(maps[key]);
+    });
+
+    // 🔄 Sincronizza le mappe
+    maps.winter.sync(maps.spring);
+    maps.winter.sync(maps.summer);
+    maps.winter.sync(maps.autumn);
+
+    maps.spring.sync(maps.winter);
+    maps.spring.sync(maps.summer);
+    maps.spring.sync(maps.autumn);
+
+    maps.summer.sync(maps.winter);
+    maps.summer.sync(maps.spring);
+    maps.summer.sync(maps.autumn);
+
+    maps.autumn.sync(maps.winter);
+    maps.autumn.sync(maps.spring);
+    maps.autumn.sync(maps.summer);
+
+    const layerNames = {
+      winter: 'Italy_winter_',
+      spring: 'Italy_spring_',
+      summer: 'Italy_summer_',
+      autumn: 'Italy_autumn_'
+    };
+
+    const layers = {};
+    years.forEach(year => {
+      layers[year] = {};
+      Object.keys(maps).forEach(season => {
+        layers[year][season] = L.tileLayer.wms(wmsUrl, {
+          ...baseOptions,
+          layers: `geonode:${layerNames[season]}${year}_TMean`
+        });
+      });
+    });
+
+    let currentYear = '2013';
+    let intervalId = null;
+
+    function showLayers(year) {
+      Object.keys(maps).forEach(season => {
+        if (maps[season]._currentLayer) {
+          maps[season].removeLayer(maps[season]._currentLayer);
+        }
+        const layer = layers[year][season];
+        layer.addTo(maps[season]);
+        maps[season]._currentLayer = layer;
+      });
+
+      document.getElementById('yearLabel').textContent = year;
+      document.getElementById('yearRange').value = year;
+    }
+
+    document.getElementById('yearRange').addEventListener('input', (e) => {
+      showLayers(e.target.value);
+    });
+
+    function playAnimation() {
+      document.getElementById('playBtn').disabled = true;
+      document.getElementById('stopBtn').disabled = false;
+      let idx = years.indexOf(currentYear);
+      intervalId = setInterval(() => {
+        idx = (idx + 1) % years.length;
+        showLayers(years[idx]);
+      }, 1500);
+    }
+
+    function stopAnimation() {
+      document.getElementById('playBtn').disabled = false;
+      document.getElementById('stopBtn').disabled = true;
+      clearInterval(intervalId);
+      intervalId = null;
+    }
+
+    document.getElementById('playBtn').addEventListener('click', playAnimation);
+    document.getElementById('stopBtn').addEventListener('click', stopAnimation);
+
+    // ✅ Avvia con il primo anno
+    showLayers(currentYear);
+  </script>
+</body>
+</html>
